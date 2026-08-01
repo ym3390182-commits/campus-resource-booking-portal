@@ -1,3 +1,4 @@
+require('dotenv').config();
 const app = require('./src/app');
 const { testDbConnection } = require('./src/config/database');
 const seedDefaultUsers = require('./src/database/seedAdmin');
