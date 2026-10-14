@@ -1,9 +1,17 @@
 import React from 'react';
 import { clsx } from 'clsx';
-import { CheckCircle2, Clock, XCircle, Ban } from 'lucide-react';
+import { CheckCircle2, Clock, XCircle, Ban, AlertTriangle, Coffee } from 'lucide-react';
 
 interface StatusBadgeProps {
-  status: 'APPROVED' | 'PENDING' | 'REJECTED' | 'CANCELLED' | 'AVAILABLE' | 'MAINTENANCE';
+  status:
+    | 'APPROVED'
+    | 'PENDING'
+    | 'REJECTED'
+    | 'CANCELLED'
+    | 'AVAILABLE'
+    | 'MAINTENANCE'
+    | 'BOOKED'
+    | 'BREAK_PERIOD';
   className?: string;
 }
 
@@ -20,6 +28,18 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className }) =
       icon: CheckCircle2,
       styles: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-emerald-500/10',
       dot: 'bg-emerald-400',
+    },
+    BOOKED: {
+      label: 'Booked',
+      icon: XCircle,
+      styles: 'bg-rose-500/10 text-rose-400 border-rose-500/20 shadow-rose-500/10',
+      dot: 'bg-rose-400',
+    },
+    BREAK_PERIOD: {
+      label: '1-Hour Break',
+      icon: Coffee,
+      styles: 'bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-amber-500/10',
+      dot: 'bg-amber-400 animate-pulse',
     },
     PENDING: {
       label: 'Pending Review',

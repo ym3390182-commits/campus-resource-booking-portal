@@ -4,11 +4,20 @@ const { sendSuccess } = require('../utils/responseHandler');
 class ResourceController {
   /**
    * GET /api/v1/resources
+   * Supports filtering by type, minimum capacity, search keyword, status, date, startTime, endTime
    */
   static async getAll(req, res, next) {
     try {
-      const { resourceTypeId, minCapacity, search, status } = req.query;
-      const resources = await ResourceService.getAllResources({ resourceTypeId, minCapacity, search, status });
+      const { resourceTypeId, minCapacity, search, status, date, startTime, endTime } = req.query;
+      const resources = await ResourceService.getAllResources({
+        resourceTypeId,
+        minCapacity,
+        search,
+        status,
+        date,
+        startTime,
+        endTime,
+      });
       return sendSuccess(res, 'Resources retrieved successfully.', resources, 200);
     } catch (error) {
       next(error);
@@ -41,16 +50,30 @@ class ResourceController {
   }
 
   /**
+   * GET /api/v1/resources/:id/schedule?date=YYYY-MM-DD
+   */
+  static async getSchedule(req, res, next) {
+    try {
+      const resourceId = req.params.id;
+      const dateString = req.query.date || new Date().toISOString().split('T')[0];
+      const schedule = await ResourceService.getResourceSchedule(resourceId, dateString);
+      return sendSuccess(res, 'Resource schedule retrieved successfully.', schedule, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * POST /api/v1/resources (Admin Only)
    */
   static async create(req, res, next) {
     try {
       const { name, resourceTypeId, building, roomNumber, capacity, amenities, status } = req.body;
 
-      if (!name || !resourceTypeId || !building || !capacity) {
+      if (!name || !resourceTypeId || !building) {
         return res.status(400).json({
           success: false,
-          message: 'Resource Name, Type ID, Building, and Capacity are mandatory.',
+          message: 'Resource Name, Type ID, and Building are mandatory.',
         });
       }
 
@@ -59,7 +82,7 @@ class ResourceController {
         resourceTypeId,
         building,
         roomNumber,
-        capacity,
+        capacity: capacity !== undefined ? capacity : 0,
         amenities,
         status,
       });
@@ -72,6 +95,7 @@ class ResourceController {
 
   /**
    * PUT /api/v1/resources/:id (Admin Only)
+   * Supports updating name, capacity, building, status, amenities
    */
   static async update(req, res, next) {
     try {

@@ -67,13 +67,16 @@ CREATE TABLE resources (
     FOREIGN KEY (resource_type_id) REFERENCES resource_types(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Seed Sample Campus Resources
+-- Seed Campus Venues (8 Official Venues)
 INSERT INTO resources (name, resource_type_id, building, room_number, capacity, amenities, status) VALUES
-('Main University Auditorium', 1, 'Admin Block', 'AUD-01', 500, 'Projector, AC, Sound System, Stage Lighting, Mic', 'AVAILABLE'),
-('APJ Abdul Kalam Seminar Hall', 2, 'Science Block', 'SH-201', 150, 'Projector, AC, Podium, Mic', 'AVAILABLE'),
-('CS High Performance Lab', 4, 'IT Block', 'LAB-304', 60, 'Computers, High Speed WiFi, AC, Projector', 'AVAILABLE'),
-('Smart Classroom 101', 3, 'Academic Block A', 'CR-101', 80, 'Smart Board, AC, Projector', 'AVAILABLE'),
-('Central Sports Complex Ground', 5, 'Sports Complex', 'G-01', 1000, 'Flood Lights, Seating Pavilion, Sound System', 'AVAILABLE');
+('Grand Convention Auditorium', 1, 'Admin Block', 'AUD-01', 500, 'Projector, AC, Sound System, Stage Lighting, Mic', 'AVAILABLE'),
+('GEHU Seminar Hall 1', 2, 'Science Block', 'SH-201', 150, 'Projector, AC, Podium, Mic', 'AVAILABLE'),
+('Digital Learning Centre', 4, 'IT Block', 'LAB-304', 60, 'Computers, High Speed WiFi, AC, Projector', 'AVAILABLE'),
+('GEHU Seminar Hall 2', 2, 'Academic Block A', 'CR-101', 80, 'Smart Board, AC, Projector', 'AVAILABLE'),
+('Football Ground', 5, 'Sports Complex', 'G-01', 1000, 'Flood Lights, Seating Pavilion, Sound System', 'AVAILABLE'),
+('Volleyball Ground', 5, 'Sports Complex', 'VG-01', 50, 'Net, Outdoor Court, Seating Area', 'AVAILABLE'),
+('Basketball Ground', 5, 'Sports Complex', 'BB-01', 100, 'Synthetic Court, Flood Lights, Hoops', 'AVAILABLE'),
+('OAT (Open Air Theatre)', 1, 'Central Campus', 'OAT-01', 800, 'Open Air Stage, Tiered Seating, Sound Setup', 'AVAILABLE');
 
 -- 5. Bookings Table
 CREATE TABLE bookings (
@@ -85,6 +88,7 @@ CREATE TABLE bookings (
     purpose_reason TEXT NOT NULL,
     start_time DATETIME NOT NULL,
     end_time DATETIME NOT NULL,
+    expected_attendees INT NULL,
     status ENUM('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED') DEFAULT 'PENDING',
     admin_remark TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

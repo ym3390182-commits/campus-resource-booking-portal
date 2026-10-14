@@ -9,6 +9,7 @@ const router = express.Router();
 router.get('/types', authenticateJWT, ResourceController.getTypes);
 router.get('/', authenticateJWT, ResourceController.getAll);
 router.get('/:id', authenticateJWT, ResourceController.getById);
+router.get('/:id/schedule', authenticateJWT, ResourceController.getSchedule);
 
 // Admin Protected Routes
 router.post('/', authenticateJWT, authorizeRoles('ADMIN'), ResourceController.create);

@@ -247,13 +247,16 @@ export const Dashboard: React.FC = () => {
                     <StatusBadge status={resource.status} />
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 mt-2 text-[11px] text-slate-400">
-                    <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {resource.capacity} Seats</span>
-                    <button
+                    <span className="flex items-center gap-1"><Users className="w-3 h-3 text-indigo-400" /> Max Capacity: <strong className="text-slate-200">{resource.capacity}</strong></span>
+                    <Button
+                      size="sm"
+                      variant={resource.status === 'MAINTENANCE' ? 'secondary' : 'primary'}
+                      disabled={resource.status === 'MAINTENANCE'}
                       onClick={() => handleOpenBookingModal(resource)}
-                      className="text-xs font-semibold text-indigo-400 hover:text-indigo-300"
+                      className="text-xs py-1 px-3"
                     >
-                      Book Slot $\rightarrow$
-                    </button>
+                      {resource.status === 'MAINTENANCE' ? 'Under Maintenance' : 'Book Now'}
+                    </Button>
                   </div>
                 </Card>
               ))

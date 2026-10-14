@@ -1,11 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
+import { Input } from '../components/common/Input';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { Skeleton } from '../components/common/SkeletonLoader';
 import { Booking, Resource } from '../types';
 import api from '../services/api';
-import { CheckSquare, CheckCircle2, XCircle, Sparkles, Building2, Plus, AlertCircle } from 'lucide-react';
+import {
+  CheckSquare,
+  CheckCircle2,
+  XCircle,
+  Sparkles,
+  Building2,
+  AlertCircle,
+  Users,
+  Edit2,
+  X,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export const AdminPanel: React.FC = () => {
@@ -17,6 +28,13 @@ export const AdminPanel: React.FC = () => {
   // Rejection remark modal state
   const [rejectingBookingId, setRejectingBookingId] = useState<number | null>(null);
   const [adminRemark, setAdminRemark] = useState('');
+
+  // Edit venue modal state
+  const [editingResource, setEditingResource] = useState<Resource | null>(null);
+  const [editCapacity, setEditCapacity] = useState<number>(0);
+  const [editBuilding, setEditBuilding] = useState<string>('');
+  const [editAmenities, setEditAmenities] = useState<string>('');
+  const [isSavingVenue, setIsSavingVenue] = useState(false);
 
   const fetchAdminData = async () => {
     setIsLoading(true);
@@ -83,13 +101,43 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
+  const handleOpenEditModal = (resource: Resource) => {
+    setEditingResource(resource);
+    setEditCapacity(resource.capacity);
+    setEditBuilding(resource.building);
+    setEditAmenities(resource.amenities || '');
+  };
+
+  const handleSaveVenueEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingResource) return;
+
+    setIsSavingVenue(true);
+    try {
+      await api.put(`/resources/${editingResource.id}`, {
+        capacity: editCapacity,
+        building: editBuilding,
+        amenities: editAmenities,
+      });
+      toast.success(`Venue "${editingResource.name}" updated successfully!`);
+      setEditingResource(null);
+      fetchAdminData();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to update venue.');
+    } finally {
+      setIsSavingVenue(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
           Admin Management Portal <Sparkles className="w-4 h-4 text-indigo-400" />
         </h1>
-        <p className="text-xs text-slate-400">Approve student reservation requests and manage university venues</p>
+        <p className="text-xs text-slate-400">
+          Approve student reservation requests and configure campus venue capacities
+        </p>
       </div>
 
       {/* Admin Sub-Header Tabs */}
@@ -112,7 +160,7 @@ export const AdminPanel: React.FC = () => {
               : 'bg-slate-900/60 text-slate-400 hover:text-slate-200'
           }`}
         >
-          <Building2 className="w-4 h-4" /> Campus Venues Management
+          <Building2 className="w-4 h-4" /> Campus Venues Management ({resources.length})
         </button>
       </div>
 
@@ -132,7 +180,7 @@ export const AdminPanel: React.FC = () => {
               <Card key={request.id} variant="glass" className="p-6 border-slate-800">
                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono font-bold text-xs text-indigo-400">{request.booking_code}</span>
                       <StatusBadge status={request.status} />
                       <span className="text-xs text-slate-400 font-medium">
@@ -145,10 +193,18 @@ export const AdminPanel: React.FC = () => {
                       <strong>Purpose:</strong> {request.purpose_reason}
                     </p>
 
-                    <div className="flex items-center gap-4 text-xs text-slate-400">
+                    <div className="flex items-center gap-4 text-xs text-slate-400 flex-wrap">
                       <span>Venue: <strong className="text-slate-200">{request.resource_name} ({request.building})</strong></span>
                       <span>•</span>
                       <span>Slot: <strong className="text-slate-200">{new Date(request.start_time).toLocaleString()}</strong></span>
+                      {request.expected_attendees && (
+                        <>
+                          <span>•</span>
+                          <span className="text-indigo-300 flex items-center gap-1">
+                            <Users className="w-3 h-3" /> Attendees: <strong>{request.expected_attendees}</strong> (Max: {request.capacity})
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -182,38 +238,52 @@ export const AdminPanel: React.FC = () => {
       {activeTab === 'RESOURCES' && (
         <div className="space-y-4">
           <Card variant="glass" className="p-0 border-slate-800 overflow-hidden">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-900/80 border-b border-slate-800 text-slate-400 font-semibold">
-                <tr>
-                  <th className="p-4">Resource Name</th>
-                  <th className="p-4">Type</th>
-                  <th className="p-4">Building</th>
-                  <th className="p-4">Capacity</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4 text-right">Toggle Maintenance</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {resources.map((resource) => (
-                  <tr key={resource.id} className="hover:bg-slate-900/40">
-                    <td className="p-4 font-bold text-slate-200">{resource.name}</td>
-                    <td className="p-4 text-indigo-400 font-medium">{resource.resource_type_name}</td>
-                    <td className="p-4 text-slate-300">{resource.building}</td>
-                    <td className="p-4 text-slate-300">{resource.capacity} Seats</td>
-                    <td className="p-4"><StatusBadge status={resource.status} /></td>
-                    <td className="p-4 text-right">
-                      <Button
-                        variant={resource.status === 'AVAILABLE' ? 'secondary' : 'primary'}
-                        size="sm"
-                        onClick={() => handleToggleStatus(resource)}
-                      >
-                        Set to {resource.status === 'AVAILABLE' ? 'Maintenance' : 'Available'}
-                      </Button>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-900/80 border-b border-slate-800 text-slate-400 font-semibold">
+                  <tr>
+                    <th className="p-4">Venue Name</th>
+                    <th className="p-4">Type</th>
+                    <th className="p-4">Building</th>
+                    <th className="p-4">Max Capacity</th>
+                    <th className="p-4">Status</th>
+                    <th className="p-4 text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {resources.map((resource) => (
+                    <tr key={resource.id} className="hover:bg-slate-900/40">
+                      <td className="p-4 font-bold text-slate-200">{resource.name}</td>
+                      <td className="p-4 text-indigo-400 font-medium">{resource.resource_type_name}</td>
+                      <td className="p-4 text-slate-300">{resource.building}</td>
+                      <td className="p-4 text-slate-100 font-semibold">
+                        <span className="flex items-center gap-1">
+                          <Users className="w-3.5 h-3.5 text-indigo-400" /> {resource.capacity} People
+                        </span>
+                      </td>
+                      <td className="p-4"><StatusBadge status={resource.status} /></td>
+                      <td className="p-4 text-right space-x-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleOpenEditModal(resource)}
+                          leftIcon={<Edit2 className="w-3.5 h-3.5" />}
+                        >
+                          Configure
+                        </Button>
+                        <Button
+                          variant={resource.status === 'AVAILABLE' ? 'secondary' : 'primary'}
+                          size="sm"
+                          onClick={() => handleToggleStatus(resource)}
+                        >
+                          {resource.status === 'AVAILABLE' ? 'Set Maintenance' : 'Set Available'}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </Card>
         </div>
       )}
@@ -225,6 +295,9 @@ export const AdminPanel: React.FC = () => {
             <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
               <AlertCircle className="w-5 h-5 text-rose-400" /> Mandatory Rejection Remark
             </h3>
+            <p className="text-xs text-slate-400">
+              Provide a clear reason for the student explaining why this venue booking was rejected.
+            </p>
             <form onSubmit={handleRejectSubmit} className="space-y-4">
               <textarea
                 rows={3}
@@ -240,6 +313,53 @@ export const AdminPanel: React.FC = () => {
                 </Button>
                 <Button type="submit" variant="danger">
                   Confirm Rejection
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
+
+      {/* Venue Configuration / Capacity Editor Modal */}
+      {editingResource && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <Card variant="glass" className="w-full max-w-md p-6 space-y-4 border-slate-800 relative">
+            <button
+              onClick={() => setEditingResource(null)}
+              className="absolute top-4 right-4 p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-indigo-400" /> Configure Venue: {editingResource.name}
+            </h3>
+            <form onSubmit={handleSaveVenueEdit} className="space-y-4">
+              <Input
+                label="Maximum People Capacity"
+                type="number"
+                min="0"
+                value={editCapacity}
+                onChange={(e) => setEditCapacity(parseInt(e.target.value, 10) || 0)}
+                leftIcon={<Users className="w-4 h-4" />}
+                required
+              />
+              <Input
+                label="Building / Location"
+                value={editBuilding}
+                onChange={(e) => setEditBuilding(e.target.value)}
+                required
+              />
+              <Input
+                label="Amenities (Comma Separated)"
+                value={editAmenities}
+                onChange={(e) => setEditAmenities(e.target.value)}
+              />
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <Button type="button" variant="ghost" onClick={() => setEditingResource(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary" isLoading={isSavingVenue}>
+                  Save Changes
                 </Button>
               </div>
             </form>

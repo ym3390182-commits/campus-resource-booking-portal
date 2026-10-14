@@ -15,7 +15,13 @@ class AuthService {
       throw error;
     }
 
-    // 2. Fetch role_id from role table
+    // 2. Fetch role_id from role table (Reject ADMIN registration)
+    if (roleName.toUpperCase() === 'ADMIN') {
+      const error = new Error('Registration as Administrator is restricted. Please contact university IT.');
+      error.statusCode = 403;
+      throw error;
+    }
+
     const [roles] = await pool.query('SELECT id, name FROM roles WHERE name = ?', [roleName.toUpperCase()]);
     if (roles.length === 0) {
       const error = new Error(`Role [${roleName}] does not exist.`);

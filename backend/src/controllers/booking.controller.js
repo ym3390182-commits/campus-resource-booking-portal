@@ -9,7 +9,7 @@ class BookingController {
     try {
       const userId = req.user.id;
       const userRole = req.user.role_name;
-      const { resourceId, eventTitle, purposeReason, startTime, endTime } = req.body;
+      const { resourceId, eventTitle, purposeReason, startTime, endTime, expectedAttendees } = req.body;
 
       if (!resourceId || !eventTitle || !purposeReason || !startTime || !endTime) {
         return res.status(400).json({
@@ -26,6 +26,7 @@ class BookingController {
         purposeReason,
         startTime,
         endTime,
+        expectedAttendees,
       });
 
       return sendSuccess(res, 'Booking request processed successfully.', booking, 201);

@@ -11,15 +11,30 @@ class BookingService {
   }
 
   /**
-   * Create a new booking request with transactional conflict prevention lock
+   * Create a new booking request with transactional conflict prevention lock and 1-hour break enforcement
    */
-  static async createBooking({ userId, userRole, resourceId, eventTitle, purposeReason, startTime, endTime }) {
-    // 1. Validate start_time < end_time
+  static async createBooking({
+    userId,
+    userRole,
+    resourceId,
+    eventTitle,
+    purposeReason,
+    startTime,
+    endTime,
+    expectedAttendees,
+  }) {
+    // 1. Validate start_time and end_time
     const start = new Date(startTime);
     const end = new Date(endTime);
 
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      const error = new Error('Invalid start or end time format.');
+      error.statusCode = 400;
+      throw error;
+    }
+
     if (start >= end) {
-      const error = new Error('End time must be strictly after Start time.');
+      const error = new Error('The selected end time must be later than the start time.');
       error.statusCode = 400;
       throw error;
     }
@@ -30,43 +45,103 @@ class BookingService {
       throw error;
     }
 
-    // 2. Check resource existence and maintenance status
-    const [resources] = await pool.query('SELECT id, status, name FROM resources WHERE id = ?', [resourceId]);
-    if (resources.length === 0) {
-      const error = new Error('Requested resource does not exist.');
-      error.statusCode = 404;
-      throw error;
+    // Connect to database and run in an explicit transaction with row locking
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      // 2. Lock and fetch the resource row
+      const [resources] = await connection.query(
+        'SELECT id, name, capacity, status FROM resources WHERE id = ? FOR UPDATE',
+        [resourceId]
+      );
+
+      if (resources.length === 0) {
+        const error = new Error('Requested resource does not exist.');
+        error.statusCode = 404;
+        throw error;
+      }
+
+      const venue = resources[0];
+
+      if (venue.status === 'MAINTENANCE') {
+        const error = new Error(`Resource [${venue.name}] is currently under maintenance and cannot be booked.`);
+        error.statusCode = 400;
+        throw error;
+      }
+
+      // 3. Validate attendee count against venue maximum capacity
+      const parsedAttendees = expectedAttendees !== undefined && expectedAttendees !== null && expectedAttendees !== ''
+        ? parseInt(expectedAttendees, 10)
+        : null;
+
+      if (parsedAttendees !== null) {
+        if (isNaN(parsedAttendees) || parsedAttendees <= 0) {
+          const error = new Error('Expected number of attendees must be a positive number.');
+          error.statusCode = 400;
+          throw error;
+        }
+
+        if (venue.capacity > 0 && parsedAttendees > venue.capacity) {
+          const error = new Error(
+            `Expected number of attendees (${parsedAttendees}) exceeds the maximum capacity of ${venue.name} (${venue.capacity} seats/people).`
+          );
+          error.statusCode = 400;
+          throw error;
+        }
+      }
+
+      // 4. Execute Conflict Check including mandatory 1-hour break with FOR UPDATE locking
+      const conflictResult = await checkBookingConflict(
+        resourceId,
+        startTime,
+        endTime,
+        null,
+        connection,
+        true
+      );
+
+      if (conflictResult.hasConflict) {
+        const error = new Error(conflictResult.message);
+        error.statusCode = 409; // HTTP 409 Conflict
+        error.conflictDetails = conflictResult;
+        throw error;
+      }
+
+      // 5. Determine Approval Status based on User Role:
+      // Faculty -> APPROVED automatically
+      // Student -> PENDING (requires Admin review)
+      // Admin -> APPROVED automatically
+      const status = userRole.toUpperCase() === 'STUDENT' ? 'PENDING' : 'APPROVED';
+      const bookingCode = this.generateBookingCode();
+
+      // 6. Insert Booking Record inside transaction
+      const [insertResult] = await connection.query(
+        `INSERT INTO bookings (booking_code, resource_id, user_id, event_title, purpose_reason, start_time, end_time, expected_attendees, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          bookingCode,
+          resourceId,
+          userId,
+          eventTitle,
+          purposeReason,
+          startTime,
+          endTime,
+          parsedAttendees,
+          status,
+        ]
+      );
+
+      await connection.commit();
+
+      return this.getBookingById(insertResult.insertId);
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
     }
-
-    if (resources[0].status === 'MAINTENANCE') {
-      const error = new Error(`Resource [${resources[0].name}] is currently under maintenance.`);
-      error.statusCode = 400;
-      throw error;
-    }
-
-    // 3. Execute Transactional Conflict Check
-    const hasConflict = await checkBookingConflict(resourceId, startTime, endTime);
-    if (hasConflict) {
-      const error = new Error('Slot Conflict: The requested resource is already booked for this time slot.');
-      error.statusCode = 409; // Conflict HTTP Status
-      throw error;
-    }
-
-    // 4. Determine Approval Status based on User Role:
-    // Faculty -> APPROVED automatically
-    // Student -> PENDING (requires Admin review)
-    // Admin -> APPROVED automatically
-    const status = userRole.toUpperCase() === 'STUDENT' ? 'PENDING' : 'APPROVED';
-    const bookingCode = this.generateBookingCode();
-
-    // 5. Insert Booking Record
-    const [result] = await pool.query(
-      `INSERT INTO bookings (booking_code, resource_id, user_id, event_title, purpose_reason, start_time, end_time, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [bookingCode, resourceId, userId, eventTitle, purposeReason, startTime, endTime, status]
-    );
-
-    return this.getBookingById(result.insertId);
   }
 
   /**
@@ -74,8 +149,9 @@ class BookingService {
    */
   static async getBookingById(bookingId) {
     const [bookings] = await pool.query(
-      `SELECT b.id, b.booking_code, b.event_title, b.purpose_reason, b.start_time, b.end_time, b.status, b.admin_remark, b.created_at,
-              r.id AS resource_id, r.name AS resource_name, r.building, r.room_number,
+      `SELECT b.id, b.booking_code, b.event_title, b.purpose_reason, b.start_time, b.end_time,
+              b.expected_attendees, b.status, b.admin_remark, b.created_at,
+              r.id AS resource_id, r.name AS resource_name, r.building, r.room_number, r.capacity AS venue_capacity,
               u.id AS user_id, u.full_name AS user_name, u.email AS user_email, u.department, u.roll_or_emp_id,
               role.name AS user_role
        FROM bookings b
@@ -100,8 +176,10 @@ class BookingService {
    */
   static async getUserBookings(userId, statusFilter = null) {
     let query = `
-      SELECT b.id, b.booking_code, b.event_title, b.purpose_reason, b.start_time, b.end_time, b.status, b.admin_remark, b.created_at,
-             r.id AS resource_id, r.name AS resource_name, r.building, r.room_number, rt.name AS resource_type_name
+      SELECT b.id, b.booking_code, b.event_title, b.purpose_reason, b.start_time, b.end_time,
+             b.expected_attendees, b.status, b.admin_remark, b.created_at,
+             r.id AS resource_id, r.name AS resource_name, r.building, r.room_number, r.capacity AS venue_capacity,
+             rt.name AS resource_type_name
       FROM bookings b
       JOIN resources r ON b.resource_id = r.id
       JOIN resource_types rt ON r.resource_type_id = rt.id
@@ -122,12 +200,14 @@ class BookingService {
   }
 
   /**
-   * Get all approved and pending bookings for FullCalendar visualizer feed
+   * Get all approved and pending bookings for FullCalendar visualizer feed,
+   * including mandatory 1-hour break periods
    */
   static async getCalendarEvents(resourceTypeId = null) {
     let query = `
-      SELECT b.id, b.booking_code AS title_code, b.event_title, b.start_time AS start, b.end_time AS end, b.status,
-             r.name AS resource_name, r.building, u.full_name AS booked_by
+      SELECT b.id, b.booking_code AS title_code, b.event_title, b.start_time AS start, b.end_time AS end,
+             b.expected_attendees, b.status,
+             r.id AS resource_id, r.name AS resource_name, r.building, r.capacity, u.full_name AS booked_by
       FROM bookings b
       JOIN resources r ON b.resource_id = r.id
       JOIN users u ON b.user_id = u.id

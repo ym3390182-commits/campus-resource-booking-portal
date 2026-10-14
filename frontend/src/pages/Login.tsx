@@ -5,7 +5,7 @@ import api from '../services/api';
 import { Input } from '../components/common/Input';
 import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
-import { Zap, Mail, Lock, Sparkles, UserCheck, ShieldCheck, GraduationCap } from 'lucide-react';
+import { Zap, Mail, Lock, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export const Login: React.FC = () => {
@@ -37,13 +37,6 @@ export const Login: React.FC = () => {
     }
   };
 
-  // Demo Autofill Helper for Viva Presentation
-  const autofillDemo = (demoEmail: string, demoPass: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-    toast.success(`Autofilled ${demoEmail} credentials!`);
-  };
-
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden selection:bg-indigo-500 selection:text-white">
       {/* Background Ambient Glowing Orbs */}
@@ -64,40 +57,13 @@ export const Login: React.FC = () => {
           </p>
         </div>
 
-        {/* Demo Account Switcher Banner (For Viva Presentation) */}
-        <div className="glass-card rounded-2xl p-3 border border-indigo-500/30 bg-indigo-950/20">
-          <p className="text-[11px] font-semibold text-indigo-300 mb-2 flex items-center justify-center gap-1.5">
-            <Sparkles className="w-3 h-3 text-indigo-400" /> Quick Viva Demo Credentials
-          </p>
-          <div className="grid grid-cols-3 gap-1.5">
-            <button
-              onClick={() => autofillDemo('admin@campus.edu', 'admin123')}
-              className="px-2 py-1.5 text-[10px] font-semibold rounded-lg bg-slate-900/80 hover:bg-indigo-600 text-slate-300 hover:text-white transition-colors flex items-center justify-center gap-1"
-            >
-              <ShieldCheck className="w-3 h-3 text-indigo-400" /> Admin
-            </button>
-            <button
-              onClick={() => autofillDemo('faculty@campus.edu', 'faculty123')}
-              className="px-2 py-1.5 text-[10px] font-semibold rounded-lg bg-slate-900/80 hover:bg-violet-600 text-slate-300 hover:text-white transition-colors flex items-center justify-center gap-1"
-            >
-              <UserCheck className="w-3 h-3 text-violet-400" /> Faculty
-            </button>
-            <button
-              onClick={() => autofillDemo('student@campus.edu', 'student123')}
-              className="px-2 py-1.5 text-[10px] font-semibold rounded-lg bg-slate-900/80 hover:bg-emerald-600 text-slate-300 hover:text-white transition-colors flex items-center justify-center gap-1"
-            >
-              <GraduationCap className="w-3 h-3 text-emerald-400" /> Student
-            </button>
-          </div>
-        </div>
-
-        {/* Login Form Card */}
+        {/* Secure Login Form Card */}
         <Card variant="glass" className="p-8 space-y-5 border border-slate-800">
           <form onSubmit={handleLogin} className="space-y-4">
             <Input
               label="University Email"
               type="email"
-              placeholder="e.g. student@campus.edu"
+              placeholder="e.g. yourname@campus.edu"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               leftIcon={<Mail className="w-4 h-4" />}

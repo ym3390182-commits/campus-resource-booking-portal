@@ -18,7 +18,7 @@ const seedDefaultUsers = async () => {
          VALUES (?, ?, ?, ?, ?, ?)`,
         ['System Admin', 'admin@campus.edu', passwordHash, 1, 'Administration', 'EMP-001']
       );
-      console.log('✅ Created Admin user: admin@campus.edu / admin123');
+      console.log('✅ Admin account verified: admin@campus.edu');
     }
 
     // 2. Seed Faculty User
@@ -29,7 +29,7 @@ const seedDefaultUsers = async () => {
          VALUES (?, ?, ?, ?, ?, ?)`,
         ['Dr. Rajesh Kumar', 'faculty@campus.edu', facultyPasswordHash, 2, 'Computer Science', 'EMP-204']
       );
-      console.log('✅ Created Faculty user: faculty@campus.edu / faculty123');
+      console.log('✅ Faculty account verified: faculty@campus.edu');
     }
 
     // 3. Seed Student User
@@ -40,7 +40,7 @@ const seedDefaultUsers = async () => {
          VALUES (?, ?, ?, ?, ?, ?)`,
         ['Yash Mittal', 'student@campus.edu', studentPasswordHash, 3, 'Computer Science', '22BCE1004']
       );
-      console.log('✅ Created Student user: student@campus.edu / student123');
+      console.log('✅ Student account verified: student@campus.edu');
     }
 
     console.log('🎉 Default users seeded successfully!');
