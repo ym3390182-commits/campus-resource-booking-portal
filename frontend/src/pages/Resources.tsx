@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { Link, Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
@@ -10,6 +12,12 @@ import { Search, MapPin, Users, Sparkles, Calendar, Clock, AlertCircle } from 'l
 import { BookingModal } from '../components/booking/BookingModal';
 
 export const Resources: React.FC = () => {
+  const { user } = useAuth();
+  const isAdmin = (user?.role || '').toUpperCase() === 'ADMIN';
+
+  if (isAdmin) {
+    return <Navigate to="/admin" replace />;
+  }
   const [resources, setResources] = useState<Resource[]>([]);
   const [types, setTypes] = useState<ResourceType[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
@@ -226,14 +234,22 @@ export const Resources: React.FC = () => {
                 </div>
 
                 <div className="pt-4 border-t border-slate-800/80 mt-6">
-                  <Button
-                    onClick={() => handleOpenBookingModal(resource)}
-                    disabled={isUnavailable}
-                    variant={isUnavailable ? 'secondary' : 'primary'}
-                    className="w-full text-xs"
-                  >
-                    {isUnavailable ? 'Under Maintenance' : 'Book Now'}
-                  </Button>
+                  {isAdmin ? (
+                    <Link to="/admin" className="w-full block">
+                      <Button variant="secondary" className="w-full text-xs">
+                        Manage in Admin Panel
+                      </Button>
+                    </Link>
+                  ) : (
+                    <Button
+                      onClick={() => handleOpenBookingModal(resource)}
+                      disabled={isUnavailable}
+                      variant={isUnavailable ? 'secondary' : 'primary'}
+                      className="w-full text-xs"
+                    >
+                      {isUnavailable ? 'Under Maintenance' : 'Book Now'}
+                    </Button>
+                  )}
                 </div>
               </Card>
             );

@@ -10,6 +10,7 @@ router.use(authenticateJWT);
 router.use(authorizeRoles('ADMIN'));
 
 router.get('/pending', ApprovalController.getPending);
+router.get('/all', ApprovalController.getAll);
 router.patch('/:id/action', ApprovalController.processAction);
 
 module.exports = router;

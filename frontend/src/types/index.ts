@@ -46,6 +46,7 @@ export interface Booking {
   booked_by?: string;
   student_name?: string;
   user_email?: string;
+  user_role?: Role | string;
   department?: string;
   roll_or_emp_id?: string;
   event_title: string;

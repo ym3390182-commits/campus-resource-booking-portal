@@ -10,12 +10,14 @@ import {
   CheckCircle2,
   Coffee,
   Info,
+  Shield,
 } from 'lucide-react';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { Resource, VenueScheduleResponse } from '../../types';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../context/AuthContext';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -36,6 +38,8 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   initialEndTime,
   onSuccess,
 }) => {
+  const { user } = useAuth();
+  const isAdmin = (user?.role || '').toUpperCase() === 'ADMIN';
   const [eventTitle, setEventTitle] = useState('');
   const [purposeReason, setPurposeReason] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -180,6 +184,11 @@ export const BookingModal: React.FC<BookingModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAdmin) {
+      toast.error('Administrators manage venues and cannot create personal booking requests.');
+      return;
+    }
+
     if (!eventTitle || !purposeReason || !startDate || !startTimeStr || !endTimeStr) {
       toast.error('Please fill in all mandatory fields.');
       return;
@@ -373,6 +382,17 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               />
             </div>
 
+            {/* Admin Self-Booking Prohibition Banner */}
+            {isAdmin && (
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-300 leading-relaxed">
+                <Shield className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                <div>
+                  <strong className="block font-bold">Admin Portal Management Notice:</strong>
+                  Administrators manage campus venues and review reservation requests. Admin self-booking is disabled.
+                </div>
+              </div>
+            )}
+
             {/* Real-time Conflict Alert Banner */}
             {isConflict && conflictMessage && (
               <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-2.5 text-xs text-rose-400 leading-relaxed">
@@ -382,7 +402,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
             )}
 
             {/* Available Green Confirmation Banner */}
-            {!isConflict && !conflictMessage && (
+            {!isAdmin && !isConflict && !conflictMessage && (
               <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-2 text-xs text-emerald-400">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 <span>Selected time slot is available and satisfies the 1-hour break policy!</span>
@@ -397,10 +417,10 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               <Button
                 type="submit"
                 variant="primary"
-                disabled={isConflict}
+                disabled={isConflict || isAdmin}
                 isLoading={isSubmitting}
               >
-                Confirm & Submit Booking
+                {isAdmin ? 'Admin Self-Booking Disabled' : 'Confirm & Submit Booking'}
               </Button>
             </div>
           </form>

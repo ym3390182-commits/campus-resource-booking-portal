@@ -18,12 +18,14 @@ import {
   Activity,
   MapPin,
   Users,
+  Shield,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { BookingModal } from '../components/booking/BookingModal';
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
+  const isAdmin = (user?.role || '').toUpperCase() === 'ADMIN';
   const [data, setData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
@@ -62,16 +64,32 @@ export const Dashboard: React.FC = () => {
               Good Afternoon, {user?.full_name}! 👋
             </h1>
             <p className="text-xs lg:text-sm text-slate-400 max-w-2xl">
-              You are logged in as <span className="text-indigo-400 font-semibold">{user?.role}</span> ({user?.department || 'University'}). Explore active venues and request zero-conflict resource reservations.
+              {isAdmin ? (
+                <>
+                  You are logged in as <span className="text-indigo-400 font-semibold">Administrator</span> (Portal Manager). Review pending reservation requests, configure venue capacities, and manage maintenance status.
+                </>
+              ) : (
+                <>
+                  You are logged in as <span className="text-indigo-400 font-semibold">{user?.role}</span> ({user?.department || 'University'}). Explore active venues and request zero-conflict resource reservations.
+                </>
+              )}
             </p>
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
-            <Link to="/resources">
-              <Button variant="primary" leftIcon={<Plus className="w-4 h-4" />}>
-                Book Resource Slot
-              </Button>
-            </Link>
+            {isAdmin ? (
+              <Link to="/admin">
+                <Button variant="primary" leftIcon={<Shield className="w-4 h-4" />}>
+                  Manage Approvals & Venues
+                </Button>
+              </Link>
+            ) : (
+              <Link to="/resources">
+                <Button variant="primary" leftIcon={<Plus className="w-4 h-4" />}>
+                  Book Resource Slot
+                </Button>
+              </Link>
+            )}
             <Link to="/calendar">
               <Button variant="secondary" leftIcon={<CalendarDays className="w-4 h-4" />}>
                 View Calendar
@@ -187,7 +205,11 @@ export const Dashboard: React.FC = () => {
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <CalendarDays className="w-10 h-10 text-slate-600 mb-2" />
                 <p className="text-xs font-semibold text-slate-300">No events scheduled for today</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">Click "Book Resource Slot" to reserve a venue.</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {isAdmin
+                    ? 'All campus venues are currently free today.'
+                    : 'Click "Book Resource Slot" to reserve a venue.'}
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -226,9 +248,15 @@ export const Dashboard: React.FC = () => {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-slate-100">Featured Venues</h3>
-            <Link to="/resources" className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold">
-              Browse All
-            </Link>
+            {isAdmin ? (
+              <Link to="/admin" className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold">
+                Manage All Venues
+              </Link>
+            ) : (
+              <Link to="/resources" className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold">
+                Browse All
+              </Link>
+            )}
           </div>
 
           <div className="space-y-3">
@@ -248,15 +276,23 @@ export const Dashboard: React.FC = () => {
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 mt-2 text-[11px] text-slate-400">
                     <span className="flex items-center gap-1"><Users className="w-3 h-3 text-indigo-400" /> Max Capacity: <strong className="text-slate-200">{resource.capacity}</strong></span>
-                    <Button
-                      size="sm"
-                      variant={resource.status === 'MAINTENANCE' ? 'secondary' : 'primary'}
-                      disabled={resource.status === 'MAINTENANCE'}
-                      onClick={() => handleOpenBookingModal(resource)}
-                      className="text-xs py-1 px-3"
-                    >
-                      {resource.status === 'MAINTENANCE' ? 'Under Maintenance' : 'Book Now'}
-                    </Button>
+                    {isAdmin ? (
+                      <Link to="/admin">
+                        <Button size="sm" variant="secondary" className="text-xs py-1 px-3">
+                          Manage
+                        </Button>
+                      </Link>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant={resource.status === 'MAINTENANCE' ? 'secondary' : 'primary'}
+                        disabled={resource.status === 'MAINTENANCE'}
+                        onClick={() => handleOpenBookingModal(resource)}
+                        className="text-xs py-1 px-3"
+                      >
+                        {resource.status === 'MAINTENANCE' ? 'Under Maintenance' : 'Book Now'}
+                      </Button>
+                    )}
                   </div>
                 </Card>
               ))
@@ -267,7 +303,17 @@ export const Dashboard: React.FC = () => {
 
       {/* 4. Recent Booking Activity Table */}
       <div className="space-y-4 pt-4">
-        <h3 className="text-base font-bold text-slate-100">Recent Booking Requests</h3>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-bold text-slate-100">Recent Booking Requests</h3>
+            <p className="text-xs text-slate-400">Latest reservation requests across campus venues</p>
+          </div>
+          {isAdmin && (
+            <Link to="/admin" className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1">
+              Open Admin Approvals Queue <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          )}
+        </div>
         <Card variant="glass" className="p-0 border-slate-800 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">

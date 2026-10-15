@@ -15,6 +15,19 @@ class ApprovalController {
   }
 
   /**
+   * GET /api/v1/approvals/all (Admin Only)
+   */
+  static async getAll(req, res, next) {
+    try {
+      const { status } = req.query;
+      const bookings = await ApprovalService.getAllBookings(status);
+      return sendSuccess(res, 'All booking requests retrieved successfully.', bookings, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * PATCH /api/v1/approvals/:id/action (Admin Only)
    */
   static async processAction(req, res, next) {

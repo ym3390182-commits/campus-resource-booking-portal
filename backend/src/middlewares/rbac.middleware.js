@@ -10,7 +10,10 @@ const authorizeRoles = (...allowedRoles) => {
       return sendError(res, 'Unauthorized action. User identity missing.', null, 401);
     }
 
-    if (!allowedRoles.includes(req.user.role_name)) {
+    const userRole = (req.user.role_name || '').toUpperCase();
+    const normalizedAllowed = allowedRoles.map((r) => (r || '').toUpperCase());
+
+    if (!normalizedAllowed.includes(userRole)) {
       return sendError(
         res,
         `Forbidden. Required role [${allowedRoles.join(', ')}], but you have role [${req.user.role_name}].`,

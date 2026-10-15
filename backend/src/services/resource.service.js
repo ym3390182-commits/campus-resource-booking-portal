@@ -153,9 +153,29 @@ class ResourceService {
     const resourceTypeId = updateData.resourceTypeId !== undefined ? updateData.resourceTypeId : existingResource.resource_type_id;
     const building = updateData.building !== undefined ? updateData.building : existingResource.building;
     const roomNumber = updateData.roomNumber !== undefined ? updateData.roomNumber : existingResource.room_number;
-    const capacity = updateData.capacity !== undefined ? parseInt(updateData.capacity, 10) : existingResource.capacity;
+    let capacity = existingResource.capacity;
+    if (updateData.capacity !== undefined) {
+      const parsedCapacity = parseInt(updateData.capacity, 10);
+      if (isNaN(parsedCapacity) || parsedCapacity <= 0) {
+        const error = new Error('Capacity must be a positive integer greater than zero.');
+        error.statusCode = 400;
+        throw error;
+      }
+      capacity = parsedCapacity;
+    }
+
+    let status = existingResource.status;
+    if (updateData.status !== undefined) {
+      const normalizedStatus = updateData.status.toUpperCase();
+      if (!['AVAILABLE', 'MAINTENANCE'].includes(normalizedStatus)) {
+        const error = new Error('Invalid venue status. Status must be AVAILABLE or MAINTENANCE.');
+        error.statusCode = 400;
+        throw error;
+      }
+      status = normalizedStatus;
+    }
+
     const amenities = updateData.amenities !== undefined ? updateData.amenities : existingResource.amenities;
-    const status = updateData.status !== undefined ? updateData.status : existingResource.status;
 
     await pool.query(
       `UPDATE resources 

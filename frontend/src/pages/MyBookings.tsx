@@ -1,14 +1,22 @@
 import React, { useEffect, useState } from 'react';
+import { Link, Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { Skeleton } from '../components/common/SkeletonLoader';
 import { Booking } from '../types';
 import api from '../services/api';
-import { BookmarkCheck, Sparkles, Ban, AlertCircle } from 'lucide-react';
+import { BookmarkCheck, Sparkles, Ban, AlertCircle, Shield } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export const MyBookings: React.FC = () => {
+  const { user } = useAuth();
+  const isAdmin = (user?.role || '').toUpperCase() === 'ADMIN';
+
+  if (isAdmin) {
+    return <Navigate to="/admin" replace />;
+  }
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,6 +60,22 @@ export const MyBookings: React.FC = () => {
         </h1>
         <p className="text-xs text-slate-400">View personal booking history, tracking codes, and status passes</p>
       </div>
+
+      {isAdmin && (
+        <Card variant="glass" className="p-4 border-indigo-500/30 bg-indigo-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Shield className="w-5 h-5 text-indigo-400 shrink-0" />
+            <p className="text-xs text-slate-300">
+              <strong className="text-slate-100 font-semibold">Admin Account Notice:</strong> You manage campus venues and student/faculty approvals. To view, approve, and audit all university reservations, please open the Admin Panel.
+            </p>
+          </div>
+          <Link to="/admin" className="shrink-0 w-full sm:w-auto">
+            <Button size="sm" variant="primary" className="text-xs w-full sm:w-auto">
+              Go to Admin Panel
+            </Button>
+          </Link>
+        </Card>
+      )}
 
       {/* Filter Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-800 pb-3">

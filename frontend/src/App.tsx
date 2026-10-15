@@ -23,9 +23,14 @@ export const App: React.FC = () => {
         <Route element={<ProtectedRoute />}>
           <Route element={<MainLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/resources" element={<Resources />} />
+
+            {/* Student & Faculty Booking Features */}
+            <Route element={<ProtectedRoute allowedRoles={['STUDENT', 'FACULTY']} />}>
+              <Route path="/resources" element={<Resources />} />
+              <Route path="/my-bookings" element={<MyBookings />} />
+            </Route>
+
             <Route path="/calendar" element={<BookingCalendar />} />
-            <Route path="/my-bookings" element={<MyBookings />} />
             <Route path="/profile" element={<UserProfile />} />
 
             {/* Admin Only Route */}

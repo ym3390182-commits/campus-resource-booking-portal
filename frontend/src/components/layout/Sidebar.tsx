@@ -15,18 +15,20 @@ import { clsx } from 'clsx';
 
 export const Sidebar: React.FC = () => {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'ADMIN';
+  const isAdmin = (user?.role || '').toUpperCase() === 'ADMIN';
 
-  const navItems = [
-    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { label: 'Resources', path: '/resources', icon: Building2 },
-    { label: 'Master Calendar', path: '/calendar', icon: CalendarDays },
-    { label: 'My Bookings', path: '/my-bookings', icon: BookmarkCheck },
-  ];
-
-  if (isAdmin) {
-    navItems.push({ label: 'Admin Approvals', path: '/admin', icon: CheckSquare });
-  }
+  const navItems = isAdmin
+    ? [
+        { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+        { label: 'Admin Management', path: '/admin', icon: CheckSquare },
+        { label: 'Master Calendar', path: '/calendar', icon: CalendarDays },
+      ]
+    : [
+        { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+        { label: 'Resources', path: '/resources', icon: Building2 },
+        { label: 'Master Calendar', path: '/calendar', icon: CalendarDays },
+        { label: 'My Bookings', path: '/my-bookings', icon: BookmarkCheck },
+      ];
 
   return (
     <aside className="w-64 glass-card border-r border-slate-800/80 hidden lg:flex flex-col justify-between p-4 min-h-[calc(100vh-65px)] sticky top-[65px]">

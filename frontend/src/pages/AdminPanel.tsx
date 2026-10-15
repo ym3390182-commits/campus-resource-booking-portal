@@ -16,12 +16,17 @@ import {
   Users,
   Edit2,
   X,
+  Calendar,
+  Clock,
+  Shield,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export const AdminPanel: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'APPROVALS' | 'RESOURCES'>('APPROVALS');
+  const [activeTab, setActiveTab] = useState<'APPROVALS' | 'ALL_BOOKINGS' | 'RESOURCES'>('APPROVALS');
   const [pendingRequests, setPendingRequests] = useState<Booking[]>([]);
+  const [allBookings, setAllBookings] = useState<Booking[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [resources, setResources] = useState<Resource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -42,6 +47,13 @@ export const AdminPanel: React.FC = () => {
       if (activeTab === 'APPROVALS') {
         const response = await api.get('/approvals/pending');
         setPendingRequests(response.data.data);
+      } else if (activeTab === 'ALL_BOOKINGS') {
+        const params: any = {};
+        if (statusFilter !== 'ALL') {
+          params.status = statusFilter;
+        }
+        const response = await api.get('/approvals/all', { params });
+        setAllBookings(response.data.data);
       } else {
         const response = await api.get('/resources');
         setResources(response.data.data);
@@ -55,7 +67,7 @@ export const AdminPanel: React.FC = () => {
 
   useEffect(() => {
     fetchAdminData();
-  }, [activeTab]);
+  }, [activeTab, statusFilter]);
 
   const handleApprove = async (bookingId: number) => {
     try {
@@ -94,10 +106,10 @@ export const AdminPanel: React.FC = () => {
     const nextStatus = resource.status === 'AVAILABLE' ? 'MAINTENANCE' : 'AVAILABLE';
     try {
       await api.put(`/resources/${resource.id}`, { status: nextStatus });
-      toast.success(`Resource status updated to ${nextStatus}.`);
+      toast.success(`Resource "${resource.name}" status updated to ${nextStatus}.`);
       fetchAdminData();
     } catch (error: any) {
-      toast.error('Failed to update resource status.');
+      toast.error(error.response?.data?.message || 'Failed to update resource status.');
     }
   };
 
@@ -141,10 +153,10 @@ export const AdminPanel: React.FC = () => {
       </div>
 
       {/* Admin Sub-Header Tabs */}
-      <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
+      <div className="flex items-center gap-3 border-b border-slate-800 pb-3 overflow-x-auto">
         <button
           onClick={() => setActiveTab('APPROVALS')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
+          className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all ${
             activeTab === 'APPROVALS'
               ? 'bg-indigo-600 text-white shadow-md'
               : 'bg-slate-900/60 text-slate-400 hover:text-slate-200'
@@ -153,8 +165,18 @@ export const AdminPanel: React.FC = () => {
           <CheckSquare className="w-4 h-4" /> Pending Approvals Queue ({pendingRequests.length})
         </button>
         <button
+          onClick={() => setActiveTab('ALL_BOOKINGS')}
+          className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all ${
+            activeTab === 'ALL_BOOKINGS'
+              ? 'bg-indigo-600 text-white shadow-md'
+              : 'bg-slate-900/60 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Calendar className="w-4 h-4" /> All Booking Requests
+        </button>
+        <button
           onClick={() => setActiveTab('RESOURCES')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
+          className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all ${
             activeTab === 'RESOURCES'
               ? 'bg-indigo-600 text-white shadow-md'
               : 'bg-slate-900/60 text-slate-400 hover:text-slate-200'
@@ -234,7 +256,117 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 2: Manage Resources */}
+      {/* Tab 2: All Booking Requests (Audit & Status Filter) */}
+      {activeTab === 'ALL_BOOKINGS' && (
+        <div className="space-y-4">
+          {/* Status Filter Tabs */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            {['ALL', 'PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setStatusFilter(tab)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
+                  statusFilter === tab
+                    ? 'bg-indigo-600 text-white shadow-md'
+                    : 'bg-slate-900/60 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          <Card variant="glass" className="p-0 border-slate-800 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-900/80 border-b border-slate-800 text-slate-400 font-semibold">
+                  <tr>
+                    <th className="p-4">Ref Code</th>
+                    <th className="p-4">Event & Purpose</th>
+                    <th className="p-4">Requested By</th>
+                    <th className="p-4">Venue</th>
+                    <th className="p-4">Date & Time Slot</th>
+                    <th className="p-4">Status</th>
+                    <th className="p-4 text-right">Actions / Remarks</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={7} className="p-4"><Skeleton className="h-6 w-full" /></td>
+                    </tr>
+                  ) : allBookings.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-12 text-center text-slate-400">
+                        No booking requests found for status "{statusFilter}".
+                      </td>
+                    </tr>
+                  ) : (
+                    allBookings.map((b) => (
+                      <tr key={b.id} className="hover:bg-slate-900/40 transition-colors">
+                        <td className="p-4 font-mono font-semibold text-indigo-400">{b.booking_code}</td>
+                        <td className="p-4 text-slate-200">
+                          <div className="font-bold">{b.event_title}</div>
+                          <div className="text-[11px] text-slate-400 truncate max-w-xs">{b.purpose_reason}</div>
+                        </td>
+                        <td className="p-4 text-slate-300">
+                          <div className="font-semibold text-slate-200">{b.student_name}</div>
+                          <div className="text-[10px] text-slate-400">
+                            {b.user_role && <span className="text-indigo-400 font-medium">[{b.user_role}] </span>}
+                            {b.department}
+                          </div>
+                        </td>
+                        <td className="p-4 text-slate-300">
+                          <div>{b.resource_name}</div>
+                          <div className="text-[11px] text-slate-500">{b.building}</div>
+                        </td>
+                        <td className="p-4 text-slate-300">
+                          <div>{new Date(b.start_time).toLocaleDateString()}</div>
+                          <div className="text-[11px] text-slate-500">
+                            {new Date(b.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(b.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </td>
+                        <td className="p-4"><StatusBadge status={b.status} /></td>
+                        <td className="p-4 text-right">
+                          {b.status === 'PENDING' ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                onClick={() => setRejectingBookingId(b.id)}
+                                className="py-1 px-2.5 text-[11px]"
+                              >
+                                Reject
+                              </Button>
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() => handleApprove(b.id)}
+                                className="py-1 px-2.5 text-[11px]"
+                              >
+                                Approve
+                              </Button>
+                            </div>
+                          ) : b.admin_remark ? (
+                            <span className="text-[11px] text-amber-400 flex items-center justify-end gap-1" title={b.admin_remark}>
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span className="truncate max-w-[140px]">{b.admin_remark}</span>
+                            </span>
+                          ) : (
+                            <span className="text-slate-600">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Tab 3: Manage Resources */}
       {activeTab === 'RESOURCES' && (
         <div className="space-y-4">
           <Card variant="glass" className="p-0 border-slate-800 overflow-hidden">
@@ -337,7 +469,7 @@ export const AdminPanel: React.FC = () => {
               <Input
                 label="Maximum People Capacity"
                 type="number"
-                min="0"
+                min="1"
                 value={editCapacity}
                 onChange={(e) => setEditCapacity(parseInt(e.target.value, 10) || 0)}
                 leftIcon={<Users className="w-4 h-4" />}

@@ -23,7 +23,22 @@ class BookingService {
     endTime,
     expectedAttendees,
   }) {
-    // 1. Validate start_time and end_time
+    // 1. Role-based permission check:
+    // The Admin is the owner/manager of the portal, NOT a booking user. Admin self-booking is prohibited.
+    const normalizedRole = (userRole || '').toUpperCase();
+    if (normalizedRole === 'ADMIN') {
+      const error = new Error('Forbidden. Administrators manage venues and are not permitted to create personal booking requests.');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    if (normalizedRole !== 'STUDENT' && normalizedRole !== 'FACULTY') {
+      const error = new Error('Only Students and Faculty are permitted to create booking requests.');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    // 2. Validate start_time and end_time
     const start = new Date(startTime);
     const end = new Date(endTime);
 
@@ -112,8 +127,7 @@ class BookingService {
       // 5. Determine Approval Status based on User Role:
       // Faculty -> APPROVED automatically
       // Student -> PENDING (requires Admin review)
-      // Admin -> APPROVED automatically
-      const status = userRole.toUpperCase() === 'STUDENT' ? 'PENDING' : 'APPROVED';
+      const status = normalizedRole === 'STUDENT' ? 'PENDING' : 'APPROVED';
       const bookingCode = this.generateBookingCode();
 
       // 6. Insert Booking Record inside transaction

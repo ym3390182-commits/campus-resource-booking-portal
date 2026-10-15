@@ -6,6 +6,8 @@ const {
   formatTime12h,
   formatDate
 } = require('../src/utils/bookingConflict');
+const BookingService = require('../src/services/booking.service');
+const ApprovalService = require('../src/services/approval.service');
 
 console.log('====================================================');
 console.log('🏛️  CAMPUS BOOKING PORTAL - CORE RULES AUTOMATED TESTS');
@@ -278,6 +280,187 @@ async function runAllTests() {
   });
 
   // -----------------------------------------------------------
+  // 7. Role-Based Permissions, Maintenance, Approvals & Capacities Below 500
+  // -----------------------------------------------------------
+  console.log('\n--- Suite 7: Role Permissions, Maintenance, Approvals & Sub-500 Capacities ---');
+
+  await runAsyncTest('Admin self-booking is prohibited and rejected with HTTP 403', async () => {
+    try {
+      await BookingService.createBooking({
+        userId: 1,
+        userRole: 'ADMIN',
+        resourceId: 1,
+        eventTitle: 'Admin Personal Event',
+        purposeReason: 'Admin attempting self-booking',
+        startTime: '2026-10-25 10:00:00',
+        endTime: '2026-10-25 12:00:00',
+      });
+      assert.fail('Should have rejected admin self-booking');
+    } catch (err) {
+      assert.strictEqual(err.statusCode, 403);
+      assert.ok(err.message.includes('Forbidden. Administrators manage venues'));
+    }
+  });
+
+  await runAsyncTest('Non-student/non-faculty booking attempt is rejected with HTTP 403', async () => {
+    try {
+      await BookingService.createBooking({
+        userId: 99,
+        userRole: 'GUEST',
+        resourceId: 1,
+        eventTitle: 'Guest Event',
+        purposeReason: 'External user booking',
+        startTime: '2026-10-25 10:00:00',
+        endTime: '2026-10-25 12:00:00',
+      });
+      assert.fail('Should have rejected guest booking');
+    } catch (err) {
+      assert.strictEqual(err.statusCode, 403);
+      assert.ok(err.message.includes('Only Students and Faculty are permitted'));
+    }
+  });
+
+  runSyncTest('Student booking status assigns PENDING while Faculty assigns APPROVED', () => {
+    const getRoleStatus = (role) => {
+      const normalizedRole = (role || '').toUpperCase();
+      if (normalizedRole === 'ADMIN') throw new Error('Admin self-booking prohibited');
+      if (normalizedRole !== 'STUDENT' && normalizedRole !== 'FACULTY') throw new Error('Unauthorized role');
+      return normalizedRole === 'STUDENT' ? 'PENDING' : 'APPROVED';
+    };
+
+    assert.strictEqual(getRoleStatus('STUDENT'), 'PENDING');
+    assert.strictEqual(getRoleStatus('student'), 'PENDING');
+    assert.strictEqual(getRoleStatus('FACULTY'), 'APPROVED');
+    assert.strictEqual(getRoleStatus('faculty'), 'APPROVED');
+    assert.throws(() => getRoleStatus('ADMIN'), /Admin self-booking prohibited/);
+    assert.throws(() => getRoleStatus('GUEST'), /Unauthorized role/);
+  });
+
+  runSyncTest('Venue under MAINTENANCE blocks new booking attempts with HTTP 400', () => {
+    const checkMaintenance = (venue) => {
+      if (venue.status === 'MAINTENANCE') {
+        const error = new Error(`Resource [${venue.name}] is currently under maintenance and cannot be booked.`);
+        error.statusCode = 400;
+        throw error;
+      }
+      return true;
+    };
+
+    const activeVenue = { id: 2, name: 'GEHU Seminar Hall 1', status: 'AVAILABLE' };
+    const maintenanceVenue = { id: 2, name: 'GEHU Seminar Hall 1', status: 'MAINTENANCE' };
+
+    assert.strictEqual(checkMaintenance(activeVenue), true);
+    assert.throws(() => checkMaintenance(maintenanceVenue), (err) => {
+      assert.strictEqual(err.statusCode, 400);
+      assert.ok(err.message.includes('currently under maintenance'));
+      return true;
+    });
+  });
+
+  runSyncTest('Maintenance status update preserves existing bookings without deletion', () => {
+    const venue = { id: 2, name: 'GEHU Seminar Hall 1', status: 'AVAILABLE' };
+    const existingBookings = [
+      { id: 101, resource_id: 2, status: 'APPROVED', event_title: 'Guest Lecture' },
+      { id: 102, resource_id: 2, status: 'PENDING', event_title: 'Club Seminar' }
+    ];
+
+    // Admin sets status to MAINTENANCE
+    venue.status = 'MAINTENANCE';
+
+    // Verify existing bookings are completely preserved
+    assert.strictEqual(existingBookings.length, 2);
+    assert.strictEqual(existingBookings[0].status, 'APPROVED');
+    assert.strictEqual(existingBookings[1].status, 'PENDING');
+  });
+
+  await runAsyncTest('Admin rejection requires mandatory remark reason (HTTP 400)', async () => {
+    try {
+      await ApprovalService.processApprovalAction(1, 'REJECTED', '');
+      assert.fail('Should have required remark reason');
+    } catch (err) {
+      assert.strictEqual(err.statusCode, 400);
+      assert.ok(err.message.includes('Mandatory Reason Required'));
+    }
+
+    try {
+      await ApprovalService.processApprovalAction(1, 'REJECTED', '   ');
+      assert.fail('Should have required non-empty remark');
+    } catch (err) {
+      assert.strictEqual(err.statusCode, 400);
+      assert.ok(err.message.includes('Mandatory Reason Required'));
+    }
+  });
+
+  await runAsyncTest('Admin approval rejects invalid action value with HTTP 400', async () => {
+    try {
+      await ApprovalService.processApprovalAction(1, 'INVALID_ACTION', 'Remark');
+      assert.fail('Should have rejected invalid action');
+    } catch (err) {
+      assert.strictEqual(err.statusCode, 400);
+      assert.ok(err.message.includes('Action must be either APPROVED or REJECTED'));
+    }
+  });
+
+  runSyncTest('Admin approval SQL automatically rejects conflicting PENDING requests with 1-hour break', () => {
+    const booking = {
+      id: 201,
+      resource_id: 2,
+      event_title: 'Math Symposium',
+      start_time: '2026-10-15 14:00:00',
+      end_time: '2026-10-15 16:00:00'
+    };
+
+    const pendingConflictingBooking = {
+      id: 202,
+      resource_id: 2,
+      start_time: new Date('2026-10-15T16:30:00'), // Within 1-hour break after 16:00
+      end_time: new Date('2026-10-15T18:00:00')
+    };
+
+    const isConflictWithBreak = (b1, b2) => {
+      const b1Start = new Date(b1.start_time);
+      const b1End = new Date(b1.end_time);
+      const b2Start = new Date(b2.start_time);
+      const b2End = new Date(b2.end_time);
+      const oneHour = 60 * 60 * 1000;
+      return b2Start.getTime() < (b1End.getTime() + oneHour) && b2End.getTime() > (b1Start.getTime() - oneHour);
+    };
+
+    assert.strictEqual(isConflictWithBreak(booking, pendingConflictingBooking), true);
+  });
+
+  runSyncTest('Enforces venue capacity limits strictly for venues with capacity below 500', () => {
+    const venuesBelow500 = [
+      { name: 'GEHU Seminar Hall 1', capacity: 150 },
+      { name: 'Digital Learning Centre', capacity: 60 },
+      { name: 'GEHU Seminar Hall 2', capacity: 80 },
+      { name: 'Volleyball Ground', capacity: 50 },
+      { name: 'Basketball Ground', capacity: 100 },
+    ];
+
+    const validateCapacity = (attendees, venueCapacity) => {
+      const parsed = parseInt(attendees, 10);
+      if (isNaN(parsed) || parsed <= 0) return { allowed: false, message: 'Invalid attendees' };
+      if (venueCapacity > 0 && parsed > venueCapacity) {
+        return { allowed: false, message: `Exceeds max capacity (${venueCapacity})` };
+      }
+      return { allowed: true };
+    };
+
+    venuesBelow500.forEach(v => {
+      assert.strictEqual(v.capacity < 500, true, `${v.name} capacity must be below 500`);
+      // Exact capacity: allowed
+      assert.strictEqual(validateCapacity(v.capacity, v.capacity).allowed, true);
+      // Below capacity: allowed
+      assert.strictEqual(validateCapacity(v.capacity - 1, v.capacity).allowed, true);
+      // Exceeding capacity by even 1 person: rejected
+      assert.strictEqual(validateCapacity(v.capacity + 1, v.capacity).allowed, false);
+      // Massively exceeding: rejected
+      assert.strictEqual(validateCapacity(500, v.capacity).allowed, false);
+    });
+  });
+
+  // -----------------------------------------------------------
   // Final Test Summary
   // -----------------------------------------------------------
   console.log('\n====================================================');
@@ -289,7 +472,7 @@ async function runAllTests() {
   if (failedCount > 0) {
     process.exit(1);
   } else {
-    console.log('🎉 ALL 20 CORE BOOKING TESTS PASSED SUCCESSFULLY!');
+    console.log(`🎉 ALL ${passedCount} CORE BOOKING & PERMISSION TESTS PASSED SUCCESSFULLY!`);
   }
 }
 

@@ -1,4 +1,5 @@
 const { pool } = require('../config/database');
+const { formatToSqlDatetime } = require('../utils/bookingConflict');
 
 class ApprovalService {
   /**
@@ -18,6 +19,36 @@ class ApprovalService {
     );
 
     return pendingBookings;
+  }
+
+  /**
+   * Fetch all booking requests across statuses for Admin management
+   * Supports optional status filter (ALL, PENDING, APPROVED, REJECTED, CANCELLED)
+   */
+  static async getAllBookings(statusFilter = null) {
+    let query = `
+      SELECT b.id, b.booking_code, b.event_title, b.purpose_reason, b.start_time, b.end_time,
+             b.expected_attendees, b.status, b.admin_remark, b.created_at,
+             r.id AS resource_id, r.name AS resource_name, r.building, r.room_number, r.capacity,
+             u.id AS user_id, u.full_name AS student_name, u.email AS student_email, u.department, u.roll_or_emp_id,
+             role.name AS user_role
+      FROM bookings b
+      JOIN resources r ON b.resource_id = r.id
+      JOIN users u ON b.user_id = u.id
+      JOIN roles role ON u.role_id = role.id
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (statusFilter && statusFilter.toUpperCase() !== 'ALL') {
+      query += ` AND b.status = ?`;
+      params.push(statusFilter.toUpperCase());
+    }
+
+    query += ` ORDER BY b.created_at DESC`;
+
+    const [bookings] = await pool.query(query, params);
+    return bookings;
   }
 
   /**
@@ -68,6 +99,21 @@ class ApprovalService {
       }
 
       if (uppercaseAction === 'APPROVED') {
+        // Enforce venue status: Cannot approve bookings for a venue currently under maintenance
+        const [resources] = await connection.query(
+          'SELECT id, name, status FROM resources WHERE id = ? FOR UPDATE',
+          [booking.resource_id]
+        );
+
+        if (resources.length > 0 && resources[0].status === 'MAINTENANCE') {
+          const error = new Error(`Cannot approve request: Venue [${resources[0].name}] is currently under maintenance.`);
+          error.statusCode = 400;
+          throw error;
+        }
+
+        const sqlEndTime = formatToSqlDatetime(booking.end_time);
+        const sqlStartTime = formatToSqlDatetime(booking.start_time);
+
         // Enforce concurrency safety: Verify no other APPROVED booking conflicts (including 1-hour break)
         const [approvedConflicts] = await connection.query(
           `SELECT id, booking_code, event_title, start_time, end_time
@@ -78,7 +124,7 @@ class ApprovalService {
              AND start_time < DATE_ADD(?, INTERVAL 1 HOUR)
              AND end_time > DATE_SUB(?, INTERVAL 1 HOUR)
            FOR UPDATE`,
-          [booking.resource_id, booking.id, booking.end_time, booking.start_time]
+          [booking.resource_id, booking.id, sqlEndTime, sqlStartTime]
         );
 
         if (approvedConflicts.length > 0) {
@@ -106,7 +152,7 @@ class ApprovalService {
              AND status = 'PENDING'
              AND start_time < DATE_ADD(?, INTERVAL 1 HOUR)
              AND end_time > DATE_SUB(?, INTERVAL 1 HOUR)`,
-          [booking.event_title, booking.resource_id, booking.id, booking.end_time, booking.start_time]
+          [booking.event_title, booking.resource_id, booking.id, sqlEndTime, sqlStartTime]
         );
       } else {
         // REJECTED
